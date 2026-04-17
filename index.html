@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Patient Risk Stratification</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', sans-serif; background: #fff; color: #333; min-height: 100vh; }
+
+    .header { background: #1a73e8; color: white; padding: 24px 40px; display: flex; align-items: center; gap: 14px; }
+    .header h1 { font-size: 1.4rem; font-weight: 600; }
+    .header p  { font-size: 0.82rem; opacity: 0.85; margin-top: 2px; }
+
+    .container { max-width: 820px; margin: 36px auto; padding: 0 20px; }
+
+    .card { background: #fff; border: 1px solid #e8eaed; border-radius: 12px; padding: 28px; margin-bottom: 22px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+    .card-title { font-size: 0.78rem; font-weight: 700; color: #1a73e8; text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 18px; }
+
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+    .form-row.full { grid-template-columns: 1fr; }
+    label { display: block; font-size: 0.75rem; font-weight: 700; color: #5f6368; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.4px; }
+    input { width: 100%; padding: 10px 13px; border: 1.5px solid #dadce0; border-radius: 8px; font-size: 0.93rem; color: #333; outline: none; transition: border-color 0.2s; }
+    input:focus { border-color: #1a73e8; }
+    .hint { font-size: 0.72rem; color: #aaa; margin-top: 3px; }
+
+    button.primary { width: 100%; padding: 12px; background: #1a73e8; color: white; border: none; border-radius: 8px; font-size: 0.97rem; font-weight: 600; cursor: pointer; margin-top: 6px; transition: background 0.2s; }
+    button.primary:hover { background: #1557b0; }
+    button.reset { width: 100%; padding: 11px; background: none; border: 1.5px solid #dadce0; color: #5f6368; font-weight: 600; border-radius: 8px; font-size: 0.88rem; cursor: pointer; margin-top: 4px; transition: all 0.2s; }
+    button.reset:hover { border-color: #1a73e8; color: #1a73e8; }
+
+    #result { display: none; }
+
+    .risk-banner { border-radius: 10px; padding: 22px; text-align: center; margin-bottom: 18px; }
+    .risk-banner.low    { background: #e6f4ea; border: 1.5px solid #34a853; }
+    .risk-banner.medium { background: #fff8e1; border: 1.5px solid #fbbc04; }
+    .risk-banner.high   { background: #fce8e6; border: 1.5px solid #ea4335; }
+    .risk-label { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; opacity: 0.65; }
+    .risk-level { font-size: 2rem; font-weight: 700; margin: 2px 0; }
+    .low .risk-level    { color: #1e8e3e; }
+    .medium .risk-level { color: #e37400; }
+    .high .risk-level   { color: #c5221f; }
+    .risk-sub { font-size: 0.83rem; opacity: 0.7; }
+
+    .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
+    .metric-box { border: 1.5px solid #e8eaed; border-radius: 9px; padding: 14px; }
+    .metric-box .mlabel { font-size: 0.68rem; font-weight: 700; color: #9aa0a6; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 3px; }
+    .metric-box .mval   { font-size: 1.05rem; font-weight: 700; color: #1a73e8; }
+    .metric-box .msub   { font-size: 0.72rem; color: #aaa; margin-top: 1px; }
+
+    .algo-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 0; }
+    .algo-box { border: 1.5px solid #e8eaed; border-radius: 9px; padding: 14px; text-align: center; }
+    .algo-box .aname { font-size: 0.7rem; font-weight: 700; color: #9aa0a6; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+    .algo-box .aval  { font-size: 1.05rem; font-weight: 700; }
+    .aval.Low    { color: #1e8e3e; }
+    .aval.Medium { color: #e37400; }
+    .aval.High   { color: #c5221f; }
+
+    .charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    .chart-title { font-size: 0.75rem; font-weight: 700; color: #444; margin-bottom: 10px; text-align: center; letter-spacing: 0.3px; }
+    canvas { display: block; width: 100%; }
+    .legend { display: flex; justify-content: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+    .legend-item { display: flex; align-items: center; gap: 4px; font-size: 0.69rem; color: #666; }
+    .leg-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+
+    #err { color: #ea4335; font-size: 0.8rem; margin-top: 8px; display: none; }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <svg width="34" height="34" viewBox="0 0 34 34" fill="none">
+    <rect width="34" height="34" rx="8" fill="white" fill-opacity="0.18"/>
+    <path d="M17 7v20M7 17h20" stroke="white" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="17" cy="17" r="9" stroke="white" stroke-width="2.2" fill="none"/>
+  </svg>
+  <div>
+    <h1>Patient Risk Stratification System</h1>
+    <p>K-Means Clustering · Decision Tree · Diabetes Dataset</p>
+  </div>
+</div>
+
+<div class="container">
+  <!-- FORM -->
+  <div class="card" id="formCard">
+    <div class="card-title">Patient Information</div>
+    <div class="form-row full">
+      <div><label>Full Name</label><input id="iName" type="text" placeholder="Enter patient name"></div>
+    </div>
+    <div class="form-row">
+      <div><label>Age (years)</label><input id="iAge" type="number" placeholder="e.g. 45"><div class="hint">26 – 85</div></div>
+      <div><label>BMI</label><input id="iBmi" type="number" placeholder="e.g. 26.5" step="0.1"><div class="hint">15 – 42</div></div>
+    </div>
+    <div class="form-row">
+      <div><label>Glucose (mg/dL)</label><input id="iGluc" type="number" placeholder="e.g. 150"><div class="hint">70 – 300</div></div>
+      <div><label>Systolic BP (mmHg)</label><input id="iSbp" type="number" placeholder="e.g. 130"><div class="hint">90 – 200</div></div>
+    </div>
+    <div class="form-row full">
+      <div><label>Cholesterol (mg/dL)</label><input id="iChol" type="number" placeholder="e.g. 200"><div class="hint">120 – 319</div></div>
+    </div>
+    <button class="primary" onclick="predict()">Predict Risk Level</button>
+    <div id="err"></div>
+  </div>
+
+  <!-- RESULT -->
+  <div id="result">
+    <div class="card">
+      <div style="font-size:0.92rem;font-weight:600;margin-bottom:14px">
+        Results for <span id="rName" style="color:#1a73e8"></span>
+      </div>
+      <div id="riskBanner" class="risk-banner">
+        <div class="risk-label">Overall Risk Level</div>
+        <div class="risk-level" id="riskLevel">—</div>
+        <div class="risk-sub" id="riskSub">—</div>
+      </div>
+      <div class="metrics">
+        <div class="metric-box"><div class="mlabel">Age</div><div class="mval" id="mAge">—</div><div class="msub">years</div></div>
+        <div class="metric-box"><div class="mlabel">BMI</div><div class="mval" id="mBmi">—</div><div class="msub" id="mBmiCat">—</div></div>
+        <div class="metric-box"><div class="mlabel">Glucose</div><div class="mval" id="mGluc">—</div><div class="msub">mg/dL</div></div>
+        <div class="metric-box"><div class="mlabel">Systolic BP</div><div class="mval" id="mSbp">—</div><div class="msub">mmHg</div></div>
+      </div>
+      <div class="algo-row">
+        <div class="algo-box"><div class="aname">Decision Tree</div><div class="aval" id="dtVal">—</div></div>
+        <div class="algo-box"><div class="aname">K-Means Cluster</div><div class="aval" id="kmVal">—</div></div>
+      </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="charts-row">
+      <div class="card" style="padding:20px">
+        <div class="chart-title">K-Means Clustering — Age vs Glucose</div>
+        <canvas id="kmCanvas" width="340" height="250"></canvas>
+        <div class="legend">
+          <div class="legend-item"><div class="leg-dot" style="background:#ea4335"></div>High-Risk</div>
+          <div class="legend-item"><div class="leg-dot" style="background:#34a853"></div>Low-Risk</div>
+          <div class="legend-item"><div class="leg-dot" style="background:#fbbc04"></div>Mid-Risk</div>
+          <div class="legend-item"><div class="leg-dot" style="background:#1a73e8"></div>You</div>
+          <div class="legend-item"><div class="leg-dot" style="background:#333;border:1.5px solid #fff;outline:1.5px solid #333"></div>Centroid</div>
+        </div>
+      </div>
+
+      <div class="card" style="padding:20px">
+        <div class="chart-title">Decision Tree — Patient Path Highlighted</div>
+        <canvas id="dtCanvas" width="340" height="250"></canvas>
+        <div class="legend">
+          <div class="legend-item"><div class="leg-dot" style="background:#ea4335"></div>High</div>
+          <div class="legend-item"><div class="leg-dot" style="background:#fbbc04"></div>Medium</div>
+          <div class="legend-item"><div class="leg-dot" style="background:#34a853"></div>Low</div>
+          <div class="legend-item" style="color:#1a73e8;font-weight:600">— Your path</div>
+        </div>
+      </div>
+    </div>
+
+    <button class="reset" onclick="resetForm()">← Assess Another Patient</button>
+  </div>
+</div>
+
+<script>
+const MEAN  = [56.365, 26.8035, 187.095, 148.505, 215.105];
+const SCALE = [17.335, 5.853,   64.201,  30.617,  60.021];
+
+const CENTERS_ORIG = [
+  [69.04, 27.95, 203.98, 175.04, 175.25],
+  [48.97, 27.17, 129.39, 137.01, 197.81],
+  [55.10, 25.56, 237.31, 141.54, 263.06],
+];
+const CENTER_LABELS = ['High','Low','Medium'];
+const CLUSTER_COLORS = ['#ea4335','#34a853','#fbbc04'];
+
+const PTS = [{"age":65,"glucose":105,"cluster":1},{"age":62,"glucose":77,"cluster":1},{"age":57,"glucose":177,"cluster":0},{"age":76,"glucose":248,"cluster":2},{"age":34,"glucose":167,"cluster":1},{"age":63,"glucose":256,"cluster":2},{"age":84,"glucose":217,"cluster":0},{"age":27,"glucose":267,"cluster":2},{"age":80,"glucose":111,"cluster":0},{"age":67,"glucose":225,"cluster":2},{"age":35,"glucose":245,"cluster":2},{"age":39,"glucose":276,"cluster":0},{"age":29,"glucose":124,"cluster":1},{"age":81,"glucose":106,"cluster":0},{"age":72,"glucose":299,"cluster":2},{"age":39,"glucose":196,"cluster":1},{"age":80,"glucose":222,"cluster":0},{"age":63,"glucose":134,"cluster":1},{"age":68,"glucose":266,"cluster":2},{"age":43,"glucose":186,"cluster":1},{"age":57,"glucose":285,"cluster":2},{"age":34,"glucose":208,"cluster":2},{"age":63,"glucose":131,"cluster":1},{"age":30,"glucose":278,"cluster":0},{"age":33,"glucose":205,"cluster":2},{"age":84,"glucose":252,"cluster":0},{"age":53,"glucose":86,"cluster":1},{"age":62,"glucose":88,"cluster":1},{"age":39,"glucose":201,"cluster":1},{"age":38,"glucose":255,"cluster":2},{"age":40,"glucose":94,"cluster":1},{"age":52,"glucose":291,"cluster":2},{"age":28,"glucose":133,"cluster":1},{"age":33,"glucose":141,"cluster":1},{"age":53,"glucose":236,"cluster":2},{"age":30,"glucose":112,"cluster":1},{"age":38,"glucose":70,"cluster":1},{"age":43,"glucose":109,"cluster":1},{"age":28,"glucose":84,"cluster":1},{"age":57,"glucose":110,"cluster":0},{"age":79,"glucose":173,"cluster":0},{"age":62,"glucose":228,"cluster":0},{"age":84,"glucose":137,"cluster":1},{"age":54,"glucose":72,"cluster":1},{"age":29,"glucose":295,"cluster":2},{"age":48,"glucose":182,"cluster":2},{"age":64,"glucose":240,"cluster":2},{"age":85,"glucose":99,"cluster":1},{"age":42,"glucose":245,"cluster":2},{"age":57,"glucose":286,"cluster":0},{"age":78,"glucose":233,"cluster":0},{"age":60,"glucose":213,"cluster":0},{"age":85,"glucose":283,"cluster":0},{"age":52,"glucose":148,"cluster":1},{"age":82,"glucose":160,"cluster":2},{"age":64,"glucose":130,"cluster":0},{"age":81,"glucose":275,"cluster":2},{"age":42,"glucose":167,"cluster":1},{"age":39,"glucose":280,"cluster":2},{"age":67,"glucose":154,"cluster":1},{"age":74,"glucose":154,"cluster":0},{"age":36,"glucose":79,"cluster":1},{"age":47,"glucose":99,"cluster":1},{"age":41,"glucose":70,"cluster":1},{"age":48,"glucose":239,"cluster":2},{"age":57,"glucose":153,"cluster":1},{"age":60,"glucose":227,"cluster":2},{"age":60,"glucose":147,"cluster":0},{"age":75,"glucose":183,"cluster":2},{"age":75,"glucose":238,"cluster":0},{"age":30,"glucose":127,"cluster":1},{"age":27,"glucose":226,"cluster":2},{"age":51,"glucose":196,"cluster":0},{"age":66,"glucose":298,"cluster":2},{"age":74,"glucose":188,"cluster":0},{"age":83,"glucose":186,"cluster":0},{"age":67,"glucose":226,"cluster":2},{"age":78,"glucose":299,"cluster":0},{"age":53,"glucose":266,"cluster":2},{"age":65,"glucose":182,"cluster":1},{"age":40,"glucose":105,"cluster":1},{"age":69,"glucose":86,"cluster":1},{"age":59,"glucose":169,"cluster":2},{"age":79,"glucose":192,"cluster":0},{"age":44,"glucose":207,"cluster":2},{"age":56,"glucose":181,"cluster":2},{"age":46,"glucose":285,"cluster":2},{"age":64,"glucose":170,"cluster":2},{"age":30,"glucose":82,"cluster":1},{"age":38,"glucose":156,"cluster":2},{"age":42,"glucose":190,"cluster":1},{"age":85,"glucose":236,"cluster":0},{"age":73,"glucose":229,"cluster":0},{"age":55,"glucose":214,"cluster":0},{"age":74,"glucose":269,"cluster":0},{"age":62,"glucose":217,"cluster":2},{"age":50,"glucose":96,"cluster":1},{"age":79,"glucose":273,"cluster":2},{"age":47,"glucose":235,"cluster":2},{"age":77,"glucose":180,"cluster":0},{"age":70,"glucose":227,"cluster":2},{"age":54,"glucose":152,"cluster":1},{"age":42,"glucose":156,"cluster":1},{"age":36,"glucose":160,"cluster":1},{"age":81,"glucose":202,"cluster":0},{"age":71,"glucose":212,"cluster":2},{"age":66,"glucose":145,"cluster":1},{"age":44,"glucose":191,"cluster":2},{"age":52,"glucose":139,"cluster":1},{"age":32,"glucose":150,"cluster":1},{"age":37,"glucose":222,"cluster":0},{"age":43,"glucose":115,"cluster":1},{"age":42,"glucose":233,"cluster":2},{"age":80,"glucose":190,"cluster":2},{"age":36,"glucose":99,"cluster":1},{"age":29,"glucose":108,"cluster":1},{"age":30,"glucose":225,"cluster":2},{"age":74,"glucose":185,"cluster":0},{"age":44,"glucose":265,"cluster":0},{"age":41,"glucose":110,"cluster":1},{"age":35,"glucose":144,"cluster":1},{"age":70,"glucose":88,"cluster":1},{"age":75,"glucose":178,"cluster":0},{"age":66,"glucose":281,"cluster":2},{"age":35,"glucose":182,"cluster":0},{"age":69,"glucose":198,"cluster":2},{"age":30,"glucose":224,"cluster":2},{"age":39,"glucose":265,"cluster":2},{"age":61,"glucose":236,"cluster":2},{"age":36,"glucose":232,"cluster":2},{"age":47,"glucose":154,"cluster":1},{"age":43,"glucose":278,"cluster":2},{"age":54,"glucose":291,"cluster":2},{"age":67,"glucose":175,"cluster":0},{"age":64,"glucose":122,"cluster":0},{"age":84,"glucose":295,"cluster":2},{"age":26,"glucose":149,"cluster":1},{"age":30,"glucose":188,"cluster":1},{"age":56,"glucose":176,"cluster":0},{"age":54,"glucose":168,"cluster":1},{"age":80,"glucose":157,"cluster":0},{"age":43,"glucose":284,"cluster":2},{"age":80,"glucose":211,"cluster":2},{"age":54,"glucose":248,"cluster":2},{"age":39,"glucose":250,"cluster":2},{"age":56,"glucose":198,"cluster":2},{"age":80,"glucose":254,"cluster":0},{"age":29,"glucose":156,"cluster":1},{"age":66,"glucose":167,"cluster":0},{"age":80,"glucose":228,"cluster":0},{"age":39,"glucose":183,"cluster":1},{"age":82,"glucose":153,"cluster":1},{"age":48,"glucose":113,"cluster":1},{"age":64,"glucose":197,"cluster":2},{"age":54,"glucose":300,"cluster":2},{"age":68,"glucose":88,"cluster":1},{"age":62,"glucose":186,"cluster":0},{"age":79,"glucose":130,"cluster":0},{"age":61,"glucose":140,"cluster":1},{"age":83,"glucose":283,"cluster":0},{"age":63,"glucose":243,"cluster":2},{"age":65,"glucose":149,"cluster":1},{"age":71,"glucose":114,"cluster":1},{"age":58,"glucose":282,"cluster":0},{"age":76,"glucose":189,"cluster":0},{"age":80,"glucose":286,"cluster":0},{"age":75,"glucose":164,"cluster":2},{"age":62,"glucose":97,"cluster":1},{"age":26,"glucose":235,"cluster":1},{"age":83,"glucose":236,"cluster":0},{"age":27,"glucose":94,"cluster":1},{"age":49,"glucose":241,"cluster":2},{"age":62,"glucose":283,"cluster":2},{"age":85,"glucose":246,"cluster":2},{"age":53,"glucose":209,"cluster":2},{"age":50,"glucose":101,"cluster":1},{"age":66,"glucose":132,"cluster":1},{"age":29,"glucose":123,"cluster":1},{"age":46,"glucose":140,"cluster":1},{"age":76,"glucose":239,"cluster":0},{"age":47,"glucose":114,"cluster":1},{"age":72,"glucose":99,"cluster":1},{"age":53,"glucose":198,"cluster":1},{"age":71,"glucose":147,"cluster":0},{"age":28,"glucose":195,"cluster":2},{"age":29,"glucose":225,"cluster":1},{"age":42,"glucose":167,"cluster":2},{"age":54,"glucose":95,"cluster":1},{"age":52,"glucose":172,"cluster":1},{"age":45,"glucose":240,"cluster":2},{"age":68,"glucose":93,"cluster":0},{"age":76,"glucose":220,"cluster":2},{"age":67,"glucose":292,"cluster":2},{"age":63,"glucose":96,"cluster":1},{"age":34,"glucose":286,"cluster":2},{"age":73,"glucose":276,"cluster":2},{"age":63,"glucose":116,"cluster":1},{"age":83,"glucose":71,"cluster":1},{"age":61,"glucose":93,"cluster":1},{"age":49,"glucose":157,"cluster":1}];
+
+const TREE = {"leaf":false,"feature":"Age","threshold":43.5,"samples":200,"depth":0,"left":{"leaf":false,"feature":"SystolicBP","threshold":119.5,"samples":60,"depth":1,"left":{"leaf":false,"feature":"Glucose","threshold":255.5,"samples":13,"depth":2,"left":{"leaf":true,"class":"Low","samples":11,"depth":3},"right":{"leaf":true,"class":"Low","samples":2,"depth":3}},"right":{"leaf":false,"feature":"Cholesterol","threshold":189.0,"samples":47,"depth":2,"left":{"leaf":true,"class":"Medium","samples":23,"depth":3},"right":{"leaf":true,"class":"Medium","samples":24,"depth":3}}},"right":{"leaf":false,"feature":"Age","threshold":77.5,"samples":140,"depth":1,"left":{"leaf":false,"feature":"Glucose","threshold":291.5,"samples":109,"depth":2,"left":{"leaf":true,"class":"Medium","samples":105,"depth":3},"right":{"leaf":true,"class":"High","samples":4,"depth":3}},"right":{"leaf":false,"feature":"Glucose","threshold":279.0,"samples":31,"depth":2,"left":{"leaf":true,"class":"Medium","samples":26,"depth":3},"right":{"leaf":true,"class":"High","samples":5,"depth":3}}}};
+
+function sc(v,i){ return (v-MEAN[i])/SCALE[i]; }
+
+function kMeansPredict(age,bmi,gluc,sbp,chol){
+  const x=[sc(age,0),sc(bmi,1),sc(gluc,2),sc(sbp,3),sc(chol,4)];
+  const csScaled=CENTERS_ORIG.map(c=>c.map((v,i)=>sc(v,i)));
+  let best=0,bestD=Infinity;
+  csScaled.forEach((c,ci)=>{
+    const d=x.reduce((s,v,i)=>s+(v-c[i])**2,0);
+    if(d<bestD){bestD=d;best=ci;}
+  });
+  return best;
+}
+
+function dtPredict(age,bmi,gluc,sbp,chol){
+  const vals={Age:age,BMI:bmi,Glucose:gluc,SystolicBP:sbp,Cholesterol:chol};
+  const path=[];
+  let node=TREE;
+  while(!node.leaf){
+    const v=vals[node.feature];
+    const goLeft=v<=node.threshold;
+    path.push({node,goLeft});
+    node=goLeft?node.left:node.right;
+  }
+  path.push({node,goLeft:null});
+  return{label:node.class,path};
+}
+
+function finalRisk(dt,km){
+  const kml=CENTER_LABELS[km];
+  if(dt==='High'||kml==='High')return'High';
+  if(dt==='Low'&&kml==='Low')return'Low';
+  return'Medium';
+}
+
+const SUBS={Low:'Low probability of adverse health events.',Medium:'Moderate risk detected. Monitoring advised.',High:'High risk detected. Medical attention recommended.'};
+function bmiCat(b){return b<18.5?'Underweight':b<25?'Normal':b<30?'Overweight':'Obese';}
+
+function predict(){
+  const name=document.getElementById('iName').value.trim();
+  const age=parseFloat(document.getElementById('iAge').value);
+  const bmi=parseFloat(document.getElementById('iBmi').value);
+  const gluc=parseFloat(document.getElementById('iGluc').value);
+  const sbp=parseFloat(document.getElementById('iSbp').value);
+  const chol=parseFloat(document.getElementById('iChol').value);
+  const err=document.getElementById('err');
+  if(!name||[age,bmi,gluc,sbp,chol].some(isNaN)){err.textContent='Please fill in all fields.';err.style.display='block';return;}
+  err.style.display='none';
+
+  const kmC=kMeansPredict(age,bmi,gluc,sbp,chol);
+  const{label:dtLabel,path:dtPath}=dtPredict(age,bmi,gluc,sbp,chol);
+  const risk=finalRisk(dtLabel,kmC);
+  const kmLabel=CENTER_LABELS[kmC];
+
+  document.getElementById('rName').textContent=name;
+  const banner=document.getElementById('riskBanner');
+  banner.className='risk-banner '+risk.toLowerCase();
+  document.getElementById('riskLevel').textContent=risk+' Risk';
+  document.getElementById('riskSub').textContent=SUBS[risk];
+  document.getElementById('mAge').textContent=age;
+  document.getElementById('mBmi').textContent=bmi;
+  document.getElementById('mBmiCat').textContent=bmiCat(bmi);
+  document.getElementById('mGluc').textContent=gluc+' mg/dL';
+  document.getElementById('mSbp').textContent=sbp+' mmHg';
+  const dtEl=document.getElementById('dtVal');dtEl.textContent=dtLabel;dtEl.className='aval '+dtLabel;
+  const kmEl=document.getElementById('kmVal');kmEl.textContent=kmLabel;kmEl.className='aval '+kmLabel;
+
+  document.getElementById('formCard').style.display='none';
+  document.getElementById('result').style.display='block';
+  window.scrollTo({top:0,behavior:'smooth'});
+  requestAnimationFrame(()=>{
+    drawKMeans(age,gluc,kmC);
+    drawDecisionTree(dtPath);
+  });
+}
+
+// ── K-Means Scatter ────────────────────────────────────────────────────────────
+function drawKMeans(patAge,patGluc,patCluster){
+  const canvas=document.getElementById('kmCanvas');
+  const dpr=window.devicePixelRatio||1;
+  const W=canvas.offsetWidth||340,H=250;
+  canvas.width=W*dpr; canvas.height=H*dpr;
+  canvas.style.height=H+'px';
+  const ctx=canvas.getContext('2d'); ctx.scale(dpr,dpr);
+  const pad={l:38,r:12,t:8,b:30};
+  const cw=W-pad.l-pad.r, ch=H-pad.t-pad.b;
+  const aMin=24,aMax=88,gMin=65,gMax=308;
+  const toX=a=>pad.l+(a-aMin)/(aMax-aMin)*cw;
+  const toY=g=>pad.t+ch-(g-gMin)/(gMax-gMin)*ch;
+
+  // grid
+  ctx.strokeStyle='#f3f3f3'; ctx.lineWidth=1;
+  [100,150,200,250,300].forEach(g=>{ctx.beginPath();ctx.moveTo(pad.l,toY(g));ctx.lineTo(pad.l+cw,toY(g));ctx.stroke();});
+  [30,40,50,60,70,80].forEach(a=>{ctx.beginPath();ctx.moveTo(toX(a),pad.t);ctx.lineTo(toX(a),pad.t+ch);ctx.stroke();});
+
+  // axes
+  ctx.strokeStyle='#ccc'; ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.moveTo(pad.l,pad.t);ctx.lineTo(pad.l,pad.t+ch);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(pad.l,pad.t+ch);ctx.lineTo(pad.l+cw,pad.t+ch);ctx.stroke();
+
+  ctx.fillStyle='#aaa'; ctx.font='9px Segoe UI'; ctx.textAlign='right';
+  [100,150,200,250,300].forEach(g=>ctx.fillText(g,pad.l-4,toY(g)+3));
+  ctx.textAlign='center';
+  [30,50,70].forEach(a=>ctx.fillText(a,toX(a),pad.t+ch+14));
+  ctx.fillStyle='#bbb'; ctx.font='8.5px Segoe UI';
+  ctx.fillText('Age',pad.l+cw/2,H-2);
+  ctx.save();ctx.translate(10,pad.t+ch/2);ctx.rotate(-Math.PI/2);ctx.fillText('Glucose',0,0);ctx.restore();
+
+  // points
+  PTS.forEach(p=>{
+    ctx.beginPath();
+    ctx.arc(toX(p.age),toY(p.glucose),3,0,Math.PI*2);
+    ctx.fillStyle=CLUSTER_COLORS[p.cluster]+'99';
+    ctx.fill();
+  });
+
+  // centroids (diamond shape)
+  CENTERS_ORIG.forEach((c,ci)=>{
+    const cx=toX(c[0]),cy=toY(c[2]),s=7;
+    ctx.beginPath();
+    ctx.moveTo(cx,cy-s);ctx.lineTo(cx+s,cy);ctx.lineTo(cx,cy+s);ctx.lineTo(cx-s,cy);ctx.closePath();
+    ctx.fillStyle=CLUSTER_COLORS[ci];
+    ctx.fill();
+    ctx.strokeStyle='#fff'; ctx.lineWidth=1.5; ctx.stroke();
+  });
+
+  // patient star
+  const px=toX(patAge),py=toY(patGluc);
+  ctx.beginPath();ctx.arc(px,py,7,0,Math.PI*2);
+  ctx.fillStyle='#1a73e8';ctx.fill();
+  ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
+  ctx.fillStyle='#fff';ctx.font='bold 8px Segoe UI';ctx.textAlign='center';
+  ctx.fillText('P',px,py+3);
+}
+
+// ── Decision Tree ──────────────────────────────────────────────────────────────
+function drawDecisionTree(path){
+  const canvas=document.getElementById('dtCanvas');
+  const dpr=window.devicePixelRatio||1;
+  const W=canvas.offsetWidth||340,H=250;
+  canvas.width=W*dpr; canvas.height=H*dpr;
+  canvas.style.height=H+'px';
+  const ctx=canvas.getContext('2d'); ctx.scale(dpr,dpr);
+
+  const LEAF_COL={Low:'#34a853',Medium:'#fbbc04',High:'#ea4335'};
+  const NODE_BG='#1a73e8', NODE_HL='#e8f0fe';
+  const levelY=[20,80,148,215];
+  const nW=64,nH=27,nr=5;
+
+  // layout x positions
+  let leafIdx=0;
+  function layout(node,depth){
+    if(node.leaf){node._x=(leafIdx+0.5)*(W/8);leafIdx++;}
+    else{layout(node.left,depth+1);layout(node.right,depth+1);node._x=(node.left._x+node.right._x)/2;}
+    node._y=levelY[depth];
+  }
+  layout(TREE,0);
+
+  const hlNodes=new Set(path.map(p=>p.node));
+
+  function rr(ctx,x,y,w,h,r){
+    ctx.beginPath();
+    ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.arcTo(x+w,y,x+w,y+r,r);
+    ctx.lineTo(x+w,y+h-r);ctx.arcTo(x+w,y+h,x+w-r,y+h,r);
+    ctx.lineTo(x+r,y+h);ctx.arcTo(x,y+h,x,y+h-r,r);
+    ctx.lineTo(x,y+r);ctx.arcTo(x,y,x+r,y,r);ctx.closePath();
+  }
+
+  function drawEdge(parent,child,isLeft){
+    const pi=path.find(p=>p.node===parent);
+    const hl=pi&&((isLeft&&pi.goLeft)||(!isLeft&&!pi.goLeft));
+    ctx.beginPath();
+    ctx.moveTo(parent._x,parent._y+nH/2);
+    ctx.lineTo(child._x,child._y-nH/2);
+    ctx.strokeStyle=hl?'#1a73e8':'#ddd'; ctx.lineWidth=hl?2.5:1;
+    ctx.stroke();
+    const mx=(parent._x+child._x)/2+(isLeft?-8:8);
+    const my=(parent._y+child._y)/2-1;
+    ctx.fillStyle=hl?'#1a73e8':'#ccc';
+    ctx.font=(hl?'bold ':'')+' 8px Segoe UI'; ctx.textAlign='center';
+    ctx.fillText(isLeft?'Yes':'No',mx,my);
+  }
+
+  function drawNode(node,depth){
+    const x=node._x,y=node._y;
+    const hl=hlNodes.has(node);
+    if(node.leaf){
+      const col=LEAF_COL[node.class];
+      rr(ctx,x-nW/2,y-nH/2,nW,nH,nr);
+      ctx.fillStyle=hl?col:col+'44'; ctx.fill();
+      if(hl){ctx.strokeStyle=col+'cc';ctx.lineWidth=2;ctx.stroke();}
+      ctx.fillStyle=hl?'#fff':'#888';
+      ctx.font=(hl?'bold ':'')+' 9px Segoe UI'; ctx.textAlign='center';
+      ctx.fillText(node.class,x,y-1);
+      ctx.font='7.5px Segoe UI'; ctx.fillStyle=hl?'#ffffffbb':'#bbb';
+      ctx.fillText('n='+node.samples,x,y+9);
+    } else {
+      rr(ctx,x-nW/2,y-nH/2,nW,nH,nr);
+      ctx.fillStyle=hl?NODE_BG:NODE_HL; ctx.fill();
+      if(hl){ctx.strokeStyle='#1557b0';ctx.lineWidth=1.5;ctx.stroke();}
+      ctx.fillStyle=hl?'#fff':'#1a73e8';
+      ctx.font='bold 8px Segoe UI'; ctx.textAlign='center';
+      ctx.fillText(node.feature,x,y-2);
+      ctx.font='7.5px Segoe UI'; ctx.fillStyle=hl?'#ffffffcc':'#666';
+      ctx.fillText('≤'+node.threshold,x,y+9);
+      drawEdge(node,node.left,true);
+      drawEdge(node,node.right,false);
+      drawNode(node.left,depth+1);
+      drawNode(node.right,depth+1);
+    }
+  }
+  drawNode(TREE,0);
+}
+
+function resetForm(){
+  document.getElementById('formCard').style.display='block';
+  document.getElementById('result').style.display='none';
+}
+</script>
+</body>
+</html>
